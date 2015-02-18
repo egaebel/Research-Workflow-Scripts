@@ -2,13 +2,41 @@
 
 import argparse
 import os
+import os.path
 import subprocess
 import sys
 from re import search
 
-###############################---------------Constants---------#####################
+###########################---------------Constants---------######################################
 PREVIEW_SIZE = 120
-#####################################################################################
+##################################################################################################
+
+class paper_search:
+
+    def __init__(self):
+        pass
+
+    def print_string(self):
+        pass
+
+class body_search(paper_search):
+    
+    def __init__(self):
+        self.preview = None
+        self.line_num = None
+        self.col_num = None
+
+    def print_string(self):
+        pass
+
+class references_search(paper_search):
+    
+    def __init__(self):
+        self.text = None
+        self.papers = []
+
+    def print_string(self):
+        pass
 
 #Counts the number of lines in the passed in text file
 #Returns the number of lines in the file
@@ -21,7 +49,9 @@ def num_file_lines(full_file_path):
     #each match is a tuple with: (PREVIEW OF MATCHED REGION, LINE NUMBER, COLUMN NUMBER)
 def search_pdf_file(keyword, 
                     full_file_path,
-                    case_sensitive=False):
+                    case_sensitive=False,
+                    search_body=True,
+                    search_reference=False):
     
     global PREVIEW_SIZE
 
@@ -121,7 +151,7 @@ def search_pdf_file(keyword,
                 matches.append((preview_string, line_num, col_num))
 
     #Remove the temp text file
-    #os.remove(temp_text_full_file_path)
+    os.remove(temp_text_full_file_path)
 
     return matches
 
@@ -130,7 +160,9 @@ def search_tree(keyword,
                 base_path=os.path.expanduser("~") + '/grad-docs/research/papers', 
                 search_by_title=True, 
                 search_all_text=False,
-                case_sensitive=False):
+                case_sensitive=False,
+                search_body=True,
+                search_references=False):
 
     #Stores tuples of format (FILE NAME, [LIST OF MATCHES])
     all_matches = []
@@ -139,14 +171,21 @@ def search_tree(keyword,
 
         full_file_path = base_path + "/" + cur_file
 
+        #Do not follow links
+        if os.path.islink(full_file_path):
+            continue
+
         #Dive into directories
-        if os.path.isdir(full_file_path):
+        if os.path.isdir(full_file_path)\
+			and not os.path.islink(full_file_path):
 
             all_matches = all_matches + search_tree(keyword=keyword,
                                                     base_path=full_file_path,
                                                     search_by_title=search_by_title,
                                                     search_all_text=search_all_text,
-                                                    case_sensitive=case_sensitive)
+                                                    case_sensitive=case_sensitive,
+                                                    search_body=search_body,
+                                                    search_references=search_references)
         #Handle files
         else:
 
@@ -156,7 +195,10 @@ def search_tree(keyword,
                 #Search all pdf text
                 if search_all_text:
                     
-                    cur_file_matches = search_pdf_file(keyword, full_file_path)
+                    cur_file_matches = search_pdf_file(keyword, 
+                                                        full_file_path, 
+                                                        search_body, 
+                                                        search_references)
                     if len(cur_file_matches) > 0:
                         all_matches.append((cur_file, cur_file_matches))
 
@@ -184,7 +226,9 @@ def search_setup(keyword,
                     subjects=[],
                     search_by_title=True,
                     search_all_text=False,
-                    case_sensitive=False):
+                    case_sensitive=False,
+                    search_body=True,
+                    search_references=False):
 
     subject_to_folder_map = subject_to_folder_mapping(base_path)
     all_results = []
@@ -201,7 +245,9 @@ def search_setup(keyword,
                                                         base_path + "/" + folder,
                                                         search_by_title,
                                                         search_all_text,
-                                                        case_sensitive)))
+                                                        case_sensitive,
+                                                        search_body,
+                                                        search_references)))
 
     else:
 
@@ -209,7 +255,9 @@ def search_setup(keyword,
                                                 base_path,
                                                 search_by_title,
                                                 search_all_text,
-                                                case_sensitive)))
+                                                case_sensitive,
+                                                search_body,
+                                                search_references)))
 
     return all_results
 
@@ -223,7 +271,8 @@ def get_all_papers(base_path=os.path.expanduser("~") + '/grad-docs/research/pape
 
         cur_full_file_path = base_path + "/" + cur_file
 
-        if os.path.isdir(cur_full_file_path):
+        if os.path.isdir(cur_full_file_path)\
+			and not os.path.islink(cur_full_file_path):
 
             papers = papers + get_all_papers(cur_full_file_path)
 
@@ -266,7 +315,7 @@ def folders_to_subjects(folders):
 #Get a list of all of the folders under base_path
 #Return the list of all folders
 def get_all_folders(base_path=os.path.expanduser("~") + '/grad-docs/research/papers', 
-                        cur_folder=None):
+                        cur_folder=""):
 
     folders = []
 
@@ -274,15 +323,12 @@ def get_all_folders(base_path=os.path.expanduser("~") + '/grad-docs/research/pap
 
         cur_full_file_path = base_path + "/" + cur_file
 
-        if os.path.isdir(cur_full_file_path):
+        if os.path.isdir(cur_full_file_path)\
+			and not os.path.islink(cur_full_file_path):
 
-            #Handle 'sub-folders'
-            if cur_folder is not None:
-                folders.append(cur_folder + "/" + cur_file)
-            else:
-                folders.append(cur_file)
-
-            folders = folders + get_all_folders(cur_full_file_path, cur_file)
+            subject_chain = cur_folder + "/" + cur_file
+            folders.append(subject_chain)
+            folders = folders + get_all_folders(cur_full_file_path, subject_chain)
 
     return folders
 
@@ -290,10 +336,10 @@ def get_all_folders(base_path=os.path.expanduser("~") + '/grad-docs/research/pap
     #(a subject is an all lowercase folder name with spaces replaced with dashes containing papers)
 #Return the list of all subjects
 def get_all_subjects(base_path=os.path.expanduser("~") + '/grad-docs/research/papers',
-                        cur_subject=None):
+                        cur_subject=""):
 
     mapping = subject_to_folder_mapping(base_path)
-    cur_folder = mapping[cur_subject] if cur_subject is not None else None
+    cur_folder = mapping[cur_subject] if cur_subject != "" else ""
     return folders_to_subjects(get_all_folders(base_path, cur_folder))
     
 def print_results(search_results):
@@ -328,7 +374,7 @@ def print_results(search_results):
                 line_num = file_search_result[1]
                 col_num = file_search_result[2]
 
-                print('{: <160} \t {: <5} \t {: <1}'.format(preview, line_num, col_num))
+                print('{: <100} \t {: <5} \t {: <1}'.format(preview, line_num, col_num))
 
     print("")
 
@@ -341,37 +387,58 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                         dest='subjects', 
                         action='append', 
                         default=[], 
-                        choices=get_all_subjects(base_path))
+                        choices=get_all_subjects(base_path),
+						help='Search by subject')
     parser.add_argument('-a', 
                         dest='list_all_subjects', 
                         default=False,
-                        action='store_true')
+                        action='store_true',
+						help='List all subjects')
     parser.add_argument('-p', 
                         dest='list_all_papers', 
                         default=False,
-                        action='store_true')
+                        action='store_true',
+						help='List all papers')
     parser.add_argument('-c',
                         dest='count_of_papers',
                         default=False,
-                        action='store_true')
+                        action='store_true',
+						help='Count papers')
     parser.add_argument('-t', 
                         dest='search_by_title', 
                         default=True, 
-                        action='store_true')
+                        action='store_true',
+						help='Search by title only (not body)(default option)')
     parser.add_argument('-w', 
                         dest='search_all_text', 
                         default=False, 
-                        action='store_true')
+                        action='store_true',
+						help='Search all document text (including title and body etc)')
+    parser.add_argument('-r',
+                        dest='search_references',
+                        default=False,
+                        action='store_true',
+						help='Search only references of paper')
     parser.add_argument('-b', 
                         dest='base_path', 
-                        default=base_path)
+                        default=base_path,
+						help='Specify a different path to begin search\
+								 from (i.e. -b <PATH TO BASE FOLDER>')
     parser.add_argument('-C',
                         dest='case_sensitive',
                         default=False,
-                        action='store_true')
+                        action='store_true',
+						help='Case sensitive search (OFF BY DEFAULT)')
     parser.add_argument(dest='keyword', 
                         nargs='+')
     args = parser.parse_args()
+
+    if args.search_references:
+        search_body = False
+        args.search_all_text = True
+        args.search_by_title = True
+    else:
+        search_body = True
 
     print("\n" + str(args) + "\n")
     print("Keyword: " + ' '.join(args.keyword) + "\n")
@@ -408,7 +475,9 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                                         args.subjects, 
                                         args.search_by_title, 
                                         args.search_all_text,
-                                        args.case_sensitive)
+                                        args.case_sensitive,
+                                        search_body,
+                                        args.search_references)
 
         #Print results
         print_results(search_results)
