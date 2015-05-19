@@ -11,6 +11,7 @@ from re import search
 PREVIEW_SIZE = 120
 ##################################################################################################
 
+# Unused code------------------------------------------------------------------------------------#
 class paper_search:
 
     def __init__(self):
@@ -37,6 +38,7 @@ class references_search(paper_search):
 
     def print_string(self):
         pass
+# End unused code-------------------------------------------------------------------------------#
 
 #Counts the number of lines in the passed in text file
 #Returns the number of lines in the file
@@ -163,7 +165,8 @@ def search_tree(keyword,
                 case_sensitive=False,
                 search_body=True,
                 search_references=False,
-                show_path=True):
+                show_path=True,
+                file_paths_only=False):
 
     #Stores dictionaries with entries format 'file_name', 'path', 'matches'(list)
     all_matches = []
@@ -186,7 +189,8 @@ def search_tree(keyword,
                                                     search_all_text=search_all_text,
                                                     case_sensitive=case_sensitive,
                                                     search_body=search_body,
-                                                    search_references=search_references)
+                                                    search_references=search_references,
+                                                    file_paths_only=file_paths_only)
         #Handle files
         else:
 
@@ -204,7 +208,10 @@ def search_tree(keyword,
                         temp_dict = {}
                         temp_dict['file_name'] = cur_file
                         temp_dict['file_path'] = full_file_path
-                        temp_dict['matches'] = cur_file_matches
+                        if not file_paths_only:
+                            temp_dict['matches'] = cur_file_matches
+                        else:
+                            temp_dict['matches'] = []
                         all_matches.append(temp_dict)
 
                 #Search by title
@@ -238,7 +245,8 @@ def search_setup(keyword,
                     case_sensitive=False,
                     search_body=True,
                     search_references=False,
-                    show_path=True):
+                    show_path=True,
+                    file_paths_only=False):
 
     subject_to_folder_map = subject_to_folder_mapping(base_path)
     all_results = []
@@ -261,7 +269,8 @@ def search_setup(keyword,
                                                             case_sensitive,
                                                             search_body,
                                                             search_references,
-                                                            show_path)
+                                                            show_path,
+                                                            file_paths_only)
 
             #Append a tuple with the subject and the results under that subject
             all_results.append(results_dict)
@@ -274,7 +283,8 @@ def search_setup(keyword,
                                                         case_sensitive,
                                                         search_body,
                                                         search_references,
-                                                        show_path)
+                                                        show_path,
+                                                        file_paths_only)
 
         all_results.append(results_dict)
 
@@ -425,7 +435,12 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                         dest='count_of_papers',
                         default=False,
                         action='store_true',
-                        help='Count papers')
+                        help='Count all papers at base path (subject)')
+    parser.add_argument('-f',
+                        dest='file_paths_only',
+                        default=False,
+                        action='store_true',
+                        help='Omit text blurbs from papers, only output file paths')
     parser.add_argument('-t', 
                         dest='search_by_title', 
                         default=True, 
@@ -451,7 +466,6 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                         default=False,
                         action='store_true',
                         help='Case sensitive search (OFF BY DEFAULT)')
-
     #TODO: Implement -o action
     parser.add_argument('-o',
                         dest='open_if_one_result',
@@ -464,7 +478,9 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                         action='store_true',
                         help='Show the path to each file printed out (default option)')
     parser.add_argument(dest='keyword', 
-                        nargs='+')
+                        nargs='+',
+                        help='Main keyword to use to search. Use quotes to search for space separated strings,\
+                                list several keywords separated by spaces to use many keywords separately to search')
     args = parser.parse_args()
 
     if args.search_references:
@@ -474,7 +490,10 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
     else:
         search_body = True
 
+    print("args")
     print("\n" + str(args) + "\n")
+    print("args.keyword")
+    print("\n" + str(args.keyword) + "\n")
     print("Keyword: " + ' '.join(args.keyword) + "\n")
 
     #List all subjects and exit
@@ -505,20 +524,73 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
 
     if args.keyword is not None:
 
-        #Run Searches
-        search_results = search_setup(' '.join(args.keyword), 
-                                        args.base_path, 
-                                        args.subjects, 
-                                        args.search_by_title, 
-                                        args.search_all_text,
-                                        args.case_sensitive,
-                                        search_body,
-                                        args.search_references,
-                                        args.show_path)
+        print(args.keyword)
+        print(len(args.keyword))
+        # Many keyword case
+        #TODO: Fix this, temporary patch to ignore this case, more work than it's currently worth
+        if len(args.keyword) > 99999:
+
+            #TODO: Probably can be done more efficiently, but I'm on the clock here 
+            #       and this is just a helper script!
+            search_results_list = []
+            search_results_dict = {}
+
+            # Run over each keyword
+            for keyword, k_count in zip(args.keyword, range(0, len(args.keyword))):
+                #Run Searches
+                search_results_list = search_setup(' '.join(keyword), 
+                                                    args.base_path, 
+                                                    args.subjects, 
+                                                    args.search_by_title, 
+                                                    args.search_all_text,
+                                                    args.case_sensitive,
+                                                    search_body,
+                                                    args.search_references,
+                                                    args.show_path,
+                                                    args.file_paths_only)
+
+                # Over all search results
+                for search_result in search_results_list:
+
+                    # If first run
+                    if k_count == 0:
+                        search_results_dict[search_result] = 0
+                        continue
+
+                    # If search result already seen
+                    if search_result in search_results_dict:
+
+                        # if not seen last run....
+                        if search_results_dict[search_result] < (k_count - 1):
+                            del search_results_dict[search_result]
+                        else:
+                            search_results_dict[search_result] = k_count
+
+            # Check when each search result last updated
+            # If not most recent run, delete
+            for key in search_results_dict.keys():
+                if search_results_dict[key] < (len(args.keyword) - 1):
+                    del search_results_dict[key]
+
+            search_results_list = list(search_results_dict.values())
+
+        # Single keyword case
+        else:
+            #Run Searches
+            search_results_list = search_setup(' '.join(args.keyword), 
+                                                args.base_path, 
+                                                args.subjects, 
+                                                args.search_by_title, 
+                                                args.search_all_text,
+                                                args.case_sensitive,
+                                                search_body,
+                                                args.search_references,
+                                                args.show_path,
+                                                args.file_paths_only)
 
         #Print results
-        print_results(search_results)
-
+        print_results(search_results_list)
+        
     else:
         print("\nYOU MUST HAVE A KEYWORD TO SEARCH BY!\n")
 
