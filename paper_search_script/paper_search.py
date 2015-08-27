@@ -528,6 +528,8 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
         print(len(args.keyword))
         # Many keyword case
         #TODO: Fix this, temporary patch to ignore this case, more work than it's currently worth
+		# Multi-keyword search will be coming soon, so by setting the condition below to be 99999
+		# I'm effectiely disabling this case and defaulting to the single keyword case
         if len(args.keyword) > 99999:
 
             #TODO: Probably can be done more efficiently, but I'm on the clock here 
