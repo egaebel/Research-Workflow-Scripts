@@ -478,7 +478,7 @@ def front_end(base_path=os.path.expanduser("~") + '/grad-docs/research/papers'):
                         action='store_true',
                         help='Show the path to each file printed out (default option)')
     parser.add_argument(dest='keyword', 
-                        nargs='+',
+                        nargs='*',
                         help='Main keyword to use to search. Use quotes to search for space separated strings,\
                                 list several keywords separated by spaces to use many keywords separately to search')
     args = parser.parse_args()
